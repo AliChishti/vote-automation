@@ -21,9 +21,13 @@ function renderFile(filePath, fileType, res) {
 const server = http.createServer(function (req, res) {
   const path = url.parse(req.url).pathname;
   if (path === "/index.css") {
-    renderFile(__dirname + "/index.css", "text/css", res)
-  }
-  else {
+    renderFile(__dirname + "/index.css", "text/css", res);
+  } else if (path === "/index.js") {
+    renderFile(__dirname + "/index.js", "text/html", res);
+  } else if (path === "/read-users") {
+    const filePath = __dirname.split("src")[0] + "data/voting_users.txt";
+    renderFile(filePath, "text/plain", res);
+  } else {
     renderFile(__dirname + "/index.html", "text/html", res);
   }
 });
