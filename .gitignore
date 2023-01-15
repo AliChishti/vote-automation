@@ -1,3 +1,4 @@
 node_modules
 data/voting_users.txt
 data/already_voted.txt
+data/already_signedup.txt

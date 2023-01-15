@@ -24,3 +24,8 @@ code {
     background-color: lightblue;
     border-radius: 4px;
 }
+button {
+    width: 150px;
+    padding: 1rem 0.5rem;
+    cursor: pointer;
+}
