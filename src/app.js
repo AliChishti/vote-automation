@@ -87,84 +87,107 @@ const server = http.createServer(async function (req, res) {
     req.on("data", async function (data) {
       const users = JSON.parse(data.toString());
 
+      // selectors required for automation
+      const voteButtonSelector = "#recaptcha-btn";
+      const loginButtonSelector = ".flex.justify-center.items-center";
+      const emailSelector = "input[data-testid='email']";
+      const submitButton = "button[data-testid='login-button']";
+      const displayNameSelector = "input[name='display_name']";
+      const passwordSelector = "input[name='password']";
+
+      // loop over all users
       for (let user of users) {
-        const browser = await puppeteer.launch({
-          headless: false,
-          defaultViewport: null,
-          args: ["--start-maximized"],
-        });
-        const page = await browser.newPage();
+        try {
+          // open a new browser session
+          const browser = await puppeteer.launch({
+            headless: false,
+            defaultViewport: null,
+            args: ["--start-maximized"],
+          });
+          const page = await browser.newPage();
 
-        // go to content creator page
-        await page.goto(
-          "https://creatordao.com/thesearch/profile/adam-elmasri"
-        );
+          // go to content creator page
+          await page.goto(
+            "https://creatordao.com/thesearch/profile/adam-elmasri"
+          );
 
-        // click vote button
-        await page.goto(
-          "https://creatordao.com/thesearch/profile/adam-elmasri"
-        );
-        const voteButtonSelector = "#recaptcha-btn";
-        await page.waitForSelector(voteButtonSelector, { visible: true });
-        await page.click(voteButtonSelector);
+          // click on vote button -> will be redirected to signup
+          await page.waitForSelector(voteButtonSelector, { visible: true });
+          await page.click(voteButtonSelector);
+          
+          // in case the user has signed up already, then press the login button
+          if (user.signedUp) {
+            await page.waitForSelector(loginButtonSelector, { visible: true });
+            await page.click(loginButtonSelector);
+          }
 
-        if (user.signedUp) {
-          // login
-          const loginButtonSelector = ".flex.justify-center.items-center";
-          await page.waitForSelector(loginButtonSelector, { visible: true });
-          await page.click(loginButtonSelector);
-        }
+          // fill email
+          await page.waitForSelector(emailSelector, { visible: true });
+          await page.type(emailSelector, user.email, { delay: 100 });
 
-        const emailSelector = "input[data-testid='email']";
-        await page.waitForSelector(emailSelector, { visible: true });
-        await page.type(emailSelector, user.email, { delay: 100 });
-
-        const submitButton = "button[data-testid='login-button']";
-        await page.waitForSelector(submitButton);
-        await page.click(submitButton);
-
-        if (!user.signedUp) {
-          const displayNameSelector = "input[name='display_name']";
-          await page.waitForSelector(displayNameSelector, { visible: true });
-          await page.type(displayNameSelector, user.name, { delay: 100 });
-        }
-
-        const passwordSelector = "input[name='password']";
-        await page.waitForSelector(passwordSelector, { visible: true });
-        await page.type(passwordSelector, user.password, { delay: 100 });
-
-        await page.waitForSelector(submitButton);
-        await page.click(submitButton);
-
-        await new Promise((r) => setTimeout(r, 10000));
-
-        if (!user.signedUp) {
-          const displayNameSelector = "input[name='display_name']";
-          await page.waitForSelector(displayNameSelector, { visible: true });
-          await page.type(displayNameSelector, user.name, { delay: 100 });
-
+          // press submit to go to next screen
           await page.waitForSelector(submitButton);
           await page.click(submitButton);
 
+          // if signing up, will need to fill display name field
+          if (!user.signedUp) {
+            await page.waitForSelector(displayNameSelector, { visible: true });
+            await page.type(displayNameSelector, user.name, { delay: 100 });
+          }
+
+          // fill password
+          await page.waitForSelector(passwordSelector, { visible: true });
+          await page.type(passwordSelector, user.password, { delay: 100 });
+
+          // press submit 
+          await page.waitForSelector(submitButton);
+          await page.click(submitButton);
+
+          // wait for 10 seconds in case the display name is needed again
+          await new Promise((r) => setTimeout(r, 10000));
+
+          // in case of signup, two possibilities now:
+          // 1. enter display name again
+          // 2. directed to vote page
+          if (!user.signedUp) {
+            try {
+              await page.waitForSelector(displayNameSelector, {
+                visible: true,
+              });
+              await page.type(displayNameSelector, user.name, { delay: 100 });
+
+              await page.waitForSelector(submitButton);
+              await page.click(submitButton);
+            } catch (error) {
+              // do nothing: display name not needed again
+            }
+
+            // user has signed up successfully
+            fs.appendFileSync(
+              __dirname.split("src")[0] + "data/already_signedup.txt",
+              `${user.email}\n`
+            );
+            user.signedUp = true;
+          }
+
+          // vote button click
+          await page.waitForSelector(voteButtonSelector, { visible: true });
+          await page.click(voteButtonSelector);
+
+          // add in already voted list
           fs.appendFileSync(
-            __dirname.split("src")[0] + "data/already_signedup.txt",
+            __dirname.split("src")[0] + "data/already_voted.txt",
             `${user.email}\n`
           );
-          user.signedUp = true;
+          
+          // change this value to change intervals between user sessions
+          await new Promise((r) => setTimeout(r, 10000));
+
+          browser.close();
+        } catch (error) {
+          // in case an iteration messed up, log that user's email and continue with the rest
+          console.log(user.email);
         }
-
-        // vote button click
-        await page.waitForSelector(voteButtonSelector, { visible: true });
-        await page.click(voteButtonSelector);
-
-        // add in already voted list
-        fs.appendFileSync(
-          __dirname.split("src")[0] + "data/already_voted.txt",
-          `${user.email}\n`
-        );
-
-        // wait 2 minutes --> 2 x 60 x 1000 = 120,000
-        await new Promise((r) => setTimeout(r, 120000));
       }
     });
   } else {
